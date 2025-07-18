@@ -14,7 +14,7 @@ class ShellSession:
             return
         self.process = await asyncio.create_subprocess_exec(
             self.cmd,
-            "-i",
+            "-c", "echo 'Terminal ready'; exec bash",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
@@ -27,33 +27,33 @@ class ShellSession:
         # removed automatic installs; users can install desired CLI manually per pane
 
     async def _read_stdout(self):
-        """Read PTY output and forward every chunk to the WebSocket queue.
-
-        Uses asyncio.StreamReader bound to the process stdout pipe so we
-        retrieve data as soon as it is available (even without newlines)."""
+        """Read PTY output and forward every chunk to the WebSocket queue."""
 
         assert self.process and self.process.stdout
-        loop = asyncio.get_running_loop()
-
-        reader = asyncio.StreamReader()
-        protocol = asyncio.StreamReaderProtocol(reader)
-        # Connect the StreamReader to the subprocess stdout pipe
-        await loop.connect_read_pipe(lambda: protocol, self.process.stdout)
-
+        
         while True:
-            data = await reader.read(1024)
-            if not data:
-                break  # EOF
-            await self.queue.put(data.decode(errors="ignore"))
+            try:
+                data = await self.process.stdout.read(1024)
+                if not data:
+                    break  # EOF
+                print(f"DEBUG: Shell output: {repr(data.decode(errors='ignore'))}")  # Debug log
+                await self.queue.put(data.decode(errors="ignore"))
+            except Exception as e:
+                print(f"DEBUG: Error reading stdout: {e}")
+                break
 
     async def write(self, text: str):
         if self.process and self.process.stdin:
+            print(f"DEBUG: Writing to shell: {repr(text)}")  # Debug log
             self.process.stdin.write(text.encode())
             await self.process.stdin.drain()
 
     async def stream(self) -> AsyncGenerator[str, None]:
+        print(f"DEBUG: Stream started for shell session")  # Debug log
         while True:
+            print(f"DEBUG: Waiting for queue data...")  # Debug log
             line = await self.queue.get()
+            print(f"DEBUG: Got line from queue: {repr(line)}")  # Debug log
             yield line
 
 class ShellManager:

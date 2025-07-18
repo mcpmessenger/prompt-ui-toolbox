@@ -41,14 +41,17 @@ const toolsList = [ { id: 'createImage', name: 'Create an image', shortName: 'Im
 
 // --- The Final, Self-Contained PromptBox Component ---
 export const PromptBox = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
-  ({ className, ...props }, ref) => {
+  ({ className, value: controlledValue, onChange: controlledOnChange, ...props }, ref) => {
     const internalTextareaRef = React.useRef<HTMLTextAreaElement>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
-    const [value, setValue] = React.useState("");
+    const [internalValue, setInternalValue] = React.useState("");
     const [imagePreview, setImagePreview] = React.useState<string | null>(null);
     const [selectedTool, setSelectedTool] = React.useState<string | null>(null);
     const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
     const [isImageDialogOpen, setIsImageDialogOpen] = React.useState(false);
+
+    // Use controlled value if provided, otherwise use internal state
+    const value = controlledValue !== undefined ? controlledValue : internalValue;
 
     React.useImperativeHandle(ref, () => internalTextareaRef.current!, []);
 
@@ -62,8 +65,13 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, React.TextareaHTM
     }, [value]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setValue(e.target.value);
-      if (props.onChange) props.onChange(e);
+      if (controlledValue !== undefined) {
+        // Controlled component - call external onChange
+        if (controlledOnChange) controlledOnChange(e);
+      } else {
+        // Uncontrolled component - update internal state
+        setInternalValue(e.target.value);
+      }
     };
 
     const handlePlusClick = () => {
@@ -90,7 +98,7 @@ export const PromptBox = React.forwardRef<HTMLTextAreaElement, React.TextareaHTM
       }
     };
 
-    const hasValue = value.trim().length > 0 || imagePreview;
+    const hasValue = (typeof value === 'string' ? value.trim().length > 0 : false) || imagePreview;
     const activeTool = selectedTool ? toolsList.find(t => t.id === selectedTool) : null;
     const ActiveToolIcon = activeTool?.icon;
 
