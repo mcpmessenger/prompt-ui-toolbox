@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./prompt-ui-toolbox-main/backend
+    environment:
+      - USE_REMOTE_AGENTS=1
+      - AGENT_PM_URL=http://agent-pm:9000
+      - AGENT_FRONTEND_URL=http://agent-frontend:9000
+      - AGENT_BACKEND_URL=http://agent-backend:9000
+      - AGENT_CLAUDE_URL=http://agent-claude:9000
+      - AGENT_GEMINI_URL=http://agent-gemini:9000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - agent-pm
+      - agent-frontend
+      - agent-backend
+      - agent-gemini
+
+  agent-pm:
+    build:
+      context: ./prompt-ui-toolbox-main/agent
+    environment:
+      - AGENT_NAME=pm
+    ports:
+      - "9000:9000"
+
+  agent-frontend:
+    build:
+      context: ./prompt-ui-toolbox-main/agent
+    environment:
+      - AGENT_NAME=frontend
+    ports:
+      - "9001:9000"
+
+  agent-backend:
+    build:
+      context: ./prompt-ui-toolbox-main/agent
+    environment:
+      - AGENT_NAME=backend
+    ports:
+      - "9002:9000"
+  agent-gemini:
+    build:
+      context: ./prompt-ui-toolbox-main/agent-gemini
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    ports:
+      - "9004:9000" 
