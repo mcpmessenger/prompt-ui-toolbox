@@ -45,16 +45,42 @@ class ShellSession:
     async def write(self, text: str):
         if self.process and self.process.stdin:
             print(f"DEBUG: Writing to shell: {repr(text)}")  # Debug log
-            self.process.stdin.write(text.encode())
-            await self.process.stdin.drain()
+            try:
+                self.process.stdin.write(text.encode())
+                await asyncio.wait_for(self.process.stdin.drain(), timeout=5.0)
+            except asyncio.TimeoutError:
+                print(f"DEBUG: Timeout writing to shell, restarting process")
+                await self._restart_process()
+            except Exception as e:
+                print(f"DEBUG: Error writing to shell: {e}")
+                await self._restart_process()
+
+    async def _restart_process(self):
+        """Restart the shell process if it's hanging or dead."""
+        if self.process:
+            try:
+                self.process.terminate()
+                await asyncio.wait_for(self.process.wait(), timeout=2.0)
+            except:
+                pass  # Force kill if needed
+        self.process = None
+        self._bootstrapped = False
+        await self.start()
 
     async def stream(self) -> AsyncGenerator[str, None]:
         print(f"DEBUG: Stream started for shell session")  # Debug log
         while True:
-            print(f"DEBUG: Waiting for queue data...")  # Debug log
-            line = await self.queue.get()
-            print(f"DEBUG: Got line from queue: {repr(line)}")  # Debug log
-            yield line
+            try:
+                print(f"DEBUG: Waiting for queue data...")  # Debug log
+                line = await asyncio.wait_for(self.queue.get(), timeout=30.0)
+                print(f"DEBUG: Got line from queue: {repr(line)}")  # Debug log
+                yield line
+            except asyncio.TimeoutError:
+                print(f"DEBUG: Timeout waiting for shell output, checking process")
+                if self.process and self.process.returncode is not None:
+                    print(f"DEBUG: Process died, restarting")
+                    await self._restart_process()
+                yield ""  # Send empty line to keep connection alive
 
 class ShellManager:
     def __init__(self):

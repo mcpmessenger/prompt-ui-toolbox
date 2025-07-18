@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 // @ts-ignore - xterm types added via devDependency
 import { Terminal } from "xterm";
 import "xterm/css/xterm.css";
+// @ts-ignore - fit addon types provided w/ package
+import { FitAddon } from "xterm-addon-fit";
 import { PromptBox } from "@/components/ui/chatgpt-prompt-input";
 
 interface TerminalPaneProps {
@@ -32,11 +34,16 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({ sessionKey, title })
         foreground: fgColor,
       },
     });
+    // Initialize FitAddon for automatic sizing
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+
     console.log(`Terminal created:`, term); // Debug log
     term.open(containerRef.current);
-    console.log(`Terminal opened in container`); // Debug log
+    // Fit the terminal to the container after opening
+    fitAddon.fit();
+    console.log(`Terminal opened and fitted in container`); // Debug log
     term.focus();
-    console.log(`Terminal focused`); // Debug log
     termRef.current = term;
 
     const backendHost = `${window.location.hostname}:8000`;
@@ -63,9 +70,45 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({ sessionKey, title })
 
     term.onData((data) => ws.send(data));
 
+    // Observe container resize events to keep terminal dimensions in sync
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddon.fit();
+    });
+    resizeObserver.observe(containerRef.current);
+
+    // Listen for theme changes and update terminal colors
+    const updateTerminalTheme = () => {
+      const isDark = document.documentElement.classList.contains("dark");
+      const bgColor = isDark ? "#000000" : "#ffffff";
+      const fgColor = isDark ? "#ffffff" : "#000000";
+      
+      term.options.theme = {
+        background: bgColor,
+        foreground: fgColor,
+      };
+      term.refresh(0, term.rows - 1);
+    };
+
+    // Create a mutation observer to watch for theme changes
+    const themeObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          updateTerminalTheme();
+        }
+      });
+    });
+
+    // Start observing the document element for class changes
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
     return () => {
       ws.close();
       term.dispose();
+      resizeObserver.disconnect();
+      themeObserver.disconnect();
     };
   }, [sessionKey]);
 
@@ -129,7 +172,11 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({ sessionKey, title })
   return (
     <div className="flex h-full flex-col">
       <div className="px-2 py-1 font-semibold border-b text-sm">{title}</div>
-      <div ref={containerRef} className="flex-1 w-full h-full overflow-hidden bg-white text-black dark:bg-black dark:text-white" />
+      <div
+        ref={containerRef}
+        className="flex-1 w-full h-full overflow-hidden bg-white text-black dark:bg-black dark:text-white"
+        style={{ minWidth: "100px", minHeight: "100px" }}
+      />
       <form onSubmit={handleSubmit} className="pt-1">
         <PromptBox 
           name="message" 
